@@ -7,6 +7,7 @@ import androidx.core.app.NotificationManagerCompat;
 
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
 import android.view.View;
@@ -46,25 +47,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void initButtons() {
-        startTimerBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                createNotification();
-            }
+        startTimerBtn.setOnClickListener(v -> {
+            createNotification();
         });
 
         exportBtn.setOnClickListener(v -> {
-            if (exportCurrentTime()) {
-                new AlertDialog.Builder(MainActivity.this)
-                        .setTitle("Reset current time to 0?")
-                        .setMessage("Your current time has been exported successfully. Do you want to reset it to 0?\nYour total time won't be affected by this.")
-                        .setPositiveButton("Yes", (dialog, which) -> resetCurrentHours())
-                        .setNegativeButton("No", null)
-                        .create()
-                        .show();
-            } else {
-                Toast.makeText(this, "There was an error while exporting your current time!", Toast.LENGTH_LONG).show();
-            }
+            exportCurrentTime();
         });
     }
 
@@ -73,13 +61,11 @@ public class MainActivity extends AppCompatActivity {
         currentTimeTV.setText("34.6");
     }
 
-    private boolean exportCurrentTime() {
-        createXLSX();
-        return true;
+    private void exportCurrentTime() {
+        new ExportXLSX().execute();
     }
 
     private void resetCurrentHours() {
-
         Toast.makeText(this, "Your current time has been reset successfully!", Toast.LENGTH_LONG).show();
     }
 
@@ -102,39 +88,56 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    private File getXLSXFile() {
-        File folder = new File(Environment.getExternalStorageDirectory(), "BecaTimer");
-        folder.mkdir();
-        File xlsx = new File(folder.getAbsolutePath(), "test.xlsx");
-        try {
-            xlsx.createNewFile();
-        } catch (IOException e) {
-            e.printStackTrace();
+    private class ExportXLSX extends AsyncTask<Void, Void, Boolean> {
+        @Override
+        protected Boolean doInBackground(Void... voids) {
+            try {
+                Workbook workbook = WorkbookFactory.create(getResources().openRawResource(R.raw.template_time));
+                Sheet sheet = workbook.getSheetAt(0);
+                sheet.getRow(0).getCell(0).setCellValue("Name goes here");
+                Row baseRow = sheet.getRow(2);
+                sheet.getRow(1).setRowStyle(baseRow.getRowStyle());
+                sheet.shiftRows(4, 4, 1);
+
+                FileOutputStream xlsx = new FileOutputStream(getXLSXFile());
+                workbook.write(xlsx);
+                xlsx.close();
+                return true;
+            } catch (IOException | InvalidFormatException e) {
+                e.printStackTrace();
+                return false;
+            }
         }
-        return xlsx;
-    }
 
-    private boolean createXLSX() {
-        //double roundOff = Math.round(a * 100.0) / 100.0;
-        try {
-            Workbook workbook = WorkbookFactory.create(getResources().openRawResource(R.raw.template_time));
-            Sheet sheet = workbook.getSheetAt(0);
-            sheet.getRow(0).getCell(0).setCellValue("Name goes here");
-            Row baseRow = sheet.getRow(2);
-            sheet.getRow(1).setRowStyle(baseRow.getRowStyle());
-            sheet.shiftRows(4, 4, 1);
-
-            FileOutputStream xlsx = new FileOutputStream(getXLSXFile());
-            workbook.write(xlsx);
-            xlsx.close();
-            return true;
-        } catch (IOException | InvalidFormatException e) {
-            e.printStackTrace();
-            return false;
+        @Override
+        protected void onPostExecute(Boolean aBoolean) {
+            if (aBoolean) {
+                new AlertDialog.Builder(MainActivity.this)
+                        .setTitle("Reset current time to 0?")
+                        .setMessage("Your current time has been exported successfully. Do you want to reset it to 0?\nYour total time won't be affected by this.")
+                        .setPositiveButton("Yes", (dialog, which) -> resetCurrentHours())
+                        .setNegativeButton("No", null)
+                        .create()
+                        .show();
+            } else {
+                Toast.makeText(MainActivity.this, "There was an error while exporting your current time!", Toast.LENGTH_LONG).show();
+            }
         }
-    }
 
-    private void addNewRow(Sheet sheet, int base, int dest) {
+        private File getXLSXFile() {
+            File folder = new File(Environment.getExternalStorageDirectory(), "BecaTimer");
+            folder.mkdir();
+            File xlsx = new File(folder.getAbsolutePath(), "test.xlsx");
+            try {
+                xlsx.createNewFile();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return xlsx;
+        }
 
+        private void addNewRow(Sheet sheet, int base, int dest) {
+
+        }
     }
 }
